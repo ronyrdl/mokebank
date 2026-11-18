@@ -8,6 +8,8 @@ x-app-env: &app-env
   REDIS_URL: redis://redis:6379/0
   JWT_SECRET: ${JWT_SECRET:-local-demo-jwt-secret-change-before-deploy}
   PLATFORM_ADMIN_KEY: ${PLATFORM_ADMIN_KEY:-local-demo-platform-key-change-before-deploy}
+  PLATFORM_ADMIN_USERNAME: ${PLATFORM_ADMIN_USERNAME:-}
+  PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:-}
   COOKIE_SECURE: ${COOKIE_SECURE:-false}
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
   TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
@@ -100,7 +102,10 @@ services:
       context: .
       target: test
     profiles: [test]
-    environment: *app-env
+    environment:
+      <<: *app-env
+      PLATFORM_ADMIN_USERNAME: test-platform-admin
+      PLATFORM_ADMIN_PASSWORD: test-platform-password
     depends_on:
       migrate:
         condition: service_completed_successfully

@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import type { z } from 'zod';
 import type { Database, DbSession } from '../database/database.js';
-import { pagination, type userInput, type updateUser, type pageSchema } from '../common/schemas.js';
+import { pagination, type userInput, type selfRegistrationInput, type currency, type updateUser, type pageSchema } from '../common/schemas.js';
 import { BankError, notFound } from '../common/errors.js';
 import { userFields, type Identity, type Role, type Trace, type User } from '../common/types.js';
+import { insertAccount } from '../accounts/accounts.service.js';
 import { audit } from '../audit/audit.service.js';
 
 export async function insertUser(tx: DbSession, tenant: string, input: z.infer<typeof userInput>, role: Role) {
@@ -17,6 +18,23 @@ export async function insertUser(tx: DbSession, tenant: string, input: z.infer<t
 
 export class UsersService {
   constructor(private readonly db: Database) {}
+
+  async selfRegister(trace: Trace, input: z.infer<typeof selfRegistrationInput>) {
+    const bankId = await this.db.connection().one<{ id: string | null }>('SELECT lookup_tenant($1) AS id', input.tenant_slug);
+    const tenant = bankId?.id;
+    if (!tenant) notFound('Banco activo no encontrado');
+    return this.db.tenant(tenant, async tx => {
+      const bank = await tx.one<{ currency: z.infer<typeof currency> }>(`SELECT c.currency FROM tenants t
+        JOIN tenant_config c ON c.tenant_id=t.id WHERE t.id=$1 AND t.active FOR SHARE OF t,c`, tenant);
+      if (!bank) notFound('Banco activo no encontrado');
+      const user = await insertUser(tx, tenant, input, 'CLIENT');
+      const actor: Identity = { tenant_id: tenant, user_id: user.id, role: 'CLIENT' };
+      const account = await insertAccount(tx, tenant, { owner_id: user.id, currency: bank.currency });
+      await audit(tx, actor, trace, 'USER_SELF_REGISTERED', user.id, null, user);
+      await audit(tx, actor, trace, 'ACCOUNT_CREATED', account.id, null, account);
+      return { user, account };
+    });
+  }
 
   create(actor: Identity, trace: Trace, input: z.infer<typeof userInput>) {
     return this.db.tenant(actor.tenant_id, async tx => {

@@ -58,6 +58,7 @@ docker compose -p bankos-test --profile test down --volumes
 | `DATABASE_URL`, `MIGRATION_DATABASE_URL` | Conexiones de aplicación y de migración |
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `APP_DB_PASSWORD` | Inicialización de PostgreSQL en Compose. Codifica caracteres reservados de una contraseña cuando la uses en una URL |
 | `REDIS_URL` | Coordinación de idempotencia y límites distribuidos |
+| `PLATFORM_ADMIN_USERNAME`, `PLATFORM_ADMIN_PASSWORD` | Usuario y contraseña del superadmin. Configura ambos en el servidor. La contraseña necesita al menos 12 caracteres |
 | `JWT_SECRET`, `PLATFORM_ADMIN_KEY` | Secretos separados de al menos 32 caracteres. Los valores de Compose son para uso local |
 | `ACCESS_TOKEN_SECONDS`, `REFRESH_TOKEN_SECONDS` | Vigencia de las sesiones |
 | `COOKIE_SECURE`, `CORS_ORIGINS`, `TRUST_PROXY_HOPS` | Cookies, orígenes web permitidos y número de proxies confiables |
@@ -83,10 +84,13 @@ Los paths de la tabla son relativos a `/api/v1`.
 | Método y ruta | Acceso |
 | --- | --- |
 | `GET /health` | Público |
-| `POST /tenants`, `PATCH /tenants/:id/status` | Plataforma |
+| `POST /tenants/platform-login` | Intercambia el usuario y contraseña de superadmin por un token de plataforma de 15 minutos |
+| `POST /tenants`, `PATCH /tenants/:id/status` | Token de plataforma o cabecera `X-Platform-Key` para clientes existentes |
+| `GET /tenants/directory` | Público. Lista paginada de nombres e identificadores de bancos activos |
 | `GET /tenants/config`, `PATCH /tenants/config` | ADMIN |
 | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout` | Credenciales, cookie de renovación o Bearer para cerrar sesión |
 | `POST /auth/register` | ADMIN |
+| `POST /auth/self-register` | Público. Crea un cliente y una cuenta activa de saldo cero en la moneda principal del banco |
 | `GET /auth/me` | Autenticado |
 | `GET /users`, `POST /users`, `GET /users/:id`, `PATCH /users/:id`, `PATCH /users/:id/status` | ADMIN |
 | `POST /accounts`, `PATCH /accounts/:id`, `PATCH /accounts/:id/status` | ADMIN |

@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +5,7 @@ import '../screems/admin/admin_screen.dart';
 import '../screems/client/client_screen.dart';
 import '../screems/login_screem.dart';
 import '../screems/operator/operator_screen.dart';
+import '../screems/register_screen.dart';
 import '../screems/welcome.dart';
 import '../providers/session_provider.dart';
 
@@ -19,7 +19,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         'CLIENT' => '/cliente',
         _ => null,
       };
-      if ((path == '/' || path == '/login') && home != null) return home;
+      if (['/', '/login', '/registro', '/operador'].contains(path) &&
+          home != null) {
+        return home;
+      }
       if (AdminScreen.paths.contains(path) && role != 'ADMIN' ||
           ClientScreen.paths.contains(path) && role != 'CLIENT') {
         return home ?? '/login';
@@ -28,7 +31,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/', builder: (context, state) => const Welcome()),
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreem()),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) =>
+            LoginScreem(initialBank: state.uri.queryParameters['banco']),
+      ),
+      GoRoute(
+        path: '/registro',
+        builder: (context, state) => const RegisterScreen(),
+      ),
       for (final (index, path) in AdminScreen.paths.indexed)
         GoRoute(
           path: path,
@@ -39,11 +50,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           path: path,
           builder: (context, state) => ClientScreen(index: index),
         ),
-      if (kIsWeb)
-        GoRoute(
-          path: '/operador',
-          builder: (context, state) => const OperatorScreen(),
-        ),
+      GoRoute(
+        path: '/operador',
+        builder: (context, state) => const OperatorScreen(),
+      ),
     ],
   );
   ref.listen(sessionProvider, (_, _) => router.refresh());

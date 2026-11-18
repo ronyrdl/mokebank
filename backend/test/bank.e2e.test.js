@@ -285,3 +285,42 @@ test('el límite de inicio de sesión usa la cuenta normalizada y el tenant', as
     await redis.del(bucket);
   }
 });
+
+test('el superadmin usa usuario y contraseña para crear un banco', async () => {
+  await app.get(REDIS).del('bankos:rate:auth:127.0.0.1');
+  const credentials = { username: process.env.PLATFORM_ADMIN_USERNAME, password: process.env.PLATFORM_ADMIN_PASSWORD };
+  expect((await call('/tenants/platform-login', { body: { ...credentials, password: 'incorrecta' } })).status).toBe(401);
+  const { access_token: token } = data(await call('/tenants/platform-login', { body: credentials }));
+  const slug = `e2e-${marker}-platform`;
+  const body = { slug, name: slug, currency: 'COP', transaction_limit: '1000', fee_fixed: '0', fee_percent: '0',
+    admin: { first_name: 'Test', last_name: 'Admin', email: 'platform-bank@example.test', password } };
+  expect((await call('/tenants', { token: a.token, body })).status).toBe(403);
+  expect(data(await call('/tenants', { token, body }), 201).admin.role).toBe('ADMIN');
+  expect((await call('/accounts', { token })).status).toBe(401);
+});
+
+test('autorregistro crea una sola cuenta en el banco elegido y respeta su aislamiento', async () => {
+  const bank = await provision('registration');
+  const directory = data(await call('/tenants/directory?limit=100'));
+  expect(directory.items).toContainEqual({ slug: bank.slug, name: bank.slug });
+
+  const input = { tenant_slug: bank.slug, first_name: 'New', last_name: 'Client',
+    email: 'self-register@example.test', password };
+  expect((await call('/auth/self-register', { body: { ...input, role: 'ADMIN' } })).status).toBe(400);
+  const { user, account } = data(await call('/auth/self-register', { body: input }), 201);
+  expect(user).toMatchObject({ role: 'CLIENT', tenant_id: bank.id });
+  expect(account).toMatchObject({ owner_id: user.id, tenant_id: bank.id, currency: 'COP',
+    balance: '0.00', status: 'ACTIVE' });
+  expect((await call('/auth/self-register', { body: input })).status).toBe(409);
+  const token = data(await login(bank.slug, input.email)).access_token;
+  expect(data(await call('/accounts', { token })).items).toEqual([account]);
+  expect((await call('/tenants/config', { token })).status).toBe(403);
+  expect((await login(a.slug, input.email)).status).toBe(401);
+  expect((await call(`/accounts/${account.id}`, { token: a.token })).status).toBe(404);
+
+  data(await call(`/tenants/${bank.id}/status`, {
+    method: 'PATCH', headers: { 'X-Platform-Key': process.env.PLATFORM_ADMIN_KEY }, body: { active: false },
+  }));
+  expect(data(await call('/tenants/directory?limit=100')).items).not.toContainEqual({ slug: bank.slug, name: bank.slug });
+  expect((await call('/auth/self-register', { body: { ...input, email: 'another@example.test' } })).status).toBe(404);
+});

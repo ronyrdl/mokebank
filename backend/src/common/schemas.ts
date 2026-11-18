@@ -29,9 +29,15 @@ export const userInput = z.strictObject({
   password,
 });
 
+export const selfRegistrationInput = userInput.extend({ tenant_slug: slug });
+
 export const updateUser = userInput.omit({ password: true }).partial()
   .refine(value => Object.keys(value).length > 0, 'Envía al menos un campo');
 export const userStatus = z.strictObject({ active: z.boolean() });
+export const platformLoginInput = z.strictObject({
+  username: z.string().trim().min(1).max(128),
+  password: z.string().min(1).max(256),
+});
 export const loginInput = z.strictObject({
   tenant_slug: slug,
   email,

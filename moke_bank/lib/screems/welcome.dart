@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:moke_bank/themes/app_colors.dart';
@@ -76,11 +75,10 @@ class Welcome extends StatelessWidget {
                   ),
                 ),
               ),
-              if (kIsWeb)
-                TextButton(
-                  onPressed: () => context.push('/operador'),
-                  child: const Text('Portal de operador'),
-                ),
+              TextButton(
+                onPressed: () => context.push('/operador'),
+                child: const Text('Administración de plataforma'),
+              ),
               const SizedBox(height: 12),
               const Text(
                 'Moke protege tus operaciones.',

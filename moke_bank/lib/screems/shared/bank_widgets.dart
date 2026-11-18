@@ -5,29 +5,45 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:moke_bank/services/auth_service.dart';
 
 class BankPage extends StatelessWidget {
-  const BankPage({super.key, this.title, this.eyebrow, required this.children});
+  const BankPage({
+    super.key,
+    this.title,
+    this.eyebrow,
+    this.form = false,
+    required this.children,
+  });
   final String? title;
   final Widget? eyebrow;
+  final bool form;
   final List<Widget> children;
 
   @override
-  Widget build(BuildContext context) => Align(
-    alignment: Alignment.topCenter,
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 760),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-        children: [
-          if (eyebrow != null) ...[eyebrow!, const SizedBox(height: 4)],
-          if (title != null) ...[
-            Text(title!, style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 20),
-          ],
-          ...children,
-        ],
+  Widget build(BuildContext context) {
+    const padding = EdgeInsets.fromLTRB(20, 16, 20, 24);
+    final content = [
+      if (eyebrow != null) ...[eyebrow!, const SizedBox(height: 4)],
+      if (title != null) ...[
+        Text(title!, style: Theme.of(context).textTheme.headlineMedium),
+        const SizedBox(height: 20),
+      ],
+      ...children,
+    ];
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: form
+            ? SingleChildScrollView(
+                padding: padding,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: content,
+                ),
+              )
+            : ListView(padding: padding, children: content),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class BankLoader<T> extends ConsumerStatefulWidget {

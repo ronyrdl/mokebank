@@ -21,6 +21,8 @@ export const accountResponse = z.object({
   status: accountStatus.shape.status, created_at: dateTime,
 }).meta({ title: 'Account' });
 
+export const selfRegistrationResponse = z.object({ user: userResponse, account: accountResponse });
+
 export const transactionResponse = z.object({
   id: uuid, tenant_id: uuid, user_id: uuid, type: transactionType,
   source_account_id: uuid.nullable(), destination_account_id: uuid.nullable(),
@@ -58,6 +60,11 @@ export function paginatedResponse(item: z.ZodType) {
     items: z.array(item), page: z.number().int(), limit: z.number().int(), has_more: z.boolean(),
   });
 }
+
+export const tenantDirectoryResponse = paginatedResponse(z.object({ slug: z.string(), name: z.string() }));
+export const platformSessionResponse = z.object({
+  access_token: z.string(), token_type: z.literal('Bearer'), expires_in: z.number().int(),
+});
 
 export const accountListResponse = paginatedResponse(accountResponse);
 export const userListResponse = paginatedResponse(userResponse);

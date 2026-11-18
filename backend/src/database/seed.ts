@@ -25,7 +25,7 @@ try {
       if (!admin) throw new Error(`Demo tenant slug is already in use: ${slug}`);
       actor = { tenant_id: id, user_id: admin.id, role: 'ADMIN' };
     } else {
-      const bank = await tenants.create(required('PLATFORM_ADMIN_KEY', 32), trace, {
+      const bank = await tenants.create({ key: required('PLATFORM_ADMIN_KEY', 32) }, trace, {
         name, slug, currency: 'COP', transaction_limit: '50000000.00', fee_fixed: '1.00', fee_percent: '1.50',
         admin: { first_name: 'Admin', last_name: 'Demo', email: `admin@${slug}.example`, password },
         rates: [

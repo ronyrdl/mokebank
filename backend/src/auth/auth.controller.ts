@@ -4,8 +4,8 @@ import type { CookieOptions, Response } from 'express';
 import { AuthService } from './auth.service.js';
 import { UsersService } from '../users/users.service.js';
 import { ACCESS_COOKIE, Contract, readBearer, readCookie, REFRESH_COOKIE } from '../common/http.js';
-import { logoutResponse, sessionResponse, userResponse } from '../common/response-schemas.js';
-import { loginInput, userInput } from '../common/schemas.js';
+import { logoutResponse, selfRegistrationResponse, sessionResponse, userResponse } from '../common/response-schemas.js';
+import { loginInput, selfRegistrationInput, userInput } from '../common/schemas.js';
 import type { BankRequest } from '../common/types.js';
 
 function cookie(path: string): CookieOptions {
@@ -21,6 +21,12 @@ export class AuthController {
   @Contract({ response: userResponse, access: 'admin', body: userInput, limit: 'auth', status: 201 })
   register(@Req() req: BankRequest) {
     return this.users.create(req.identity!, req.trace, req.body);
+  }
+
+  @Post('self-register')
+  @Contract({ response: selfRegistrationResponse, access: 'public', body: selfRegistrationInput, limit: 'auth', status: 201 })
+  selfRegister(@Req() req: BankRequest) {
+    return this.users.selfRegister(req.trace, req.body);
   }
 
   @Post('login')

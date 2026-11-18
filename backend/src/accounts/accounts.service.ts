@@ -13,6 +13,13 @@ export async function findAccount(tx: DbSession, actor: Identity, id: string, lo
   return row ?? notFound('Cuenta no encontrada');
 }
 
+export async function insertAccount(tx: DbSession, tenant: string, input: z.infer<typeof accountInput>) {
+  const number = input.number ?? randomInt(100_000_000_000, 1_000_000_000_000).toString();
+  const row = await tx.one<Account>(`INSERT INTO accounts (tenant_id,id,number,owner_id,currency)
+    VALUES ($1,$2,$3,$4,$5) RETURNING *`, tenant, randomUUID(), number, input.owner_id, input.currency);
+  return row!;
+}
+
 export class AccountsService {
   constructor(private readonly db: Database) {}
 
@@ -20,10 +27,8 @@ export class AccountsService {
     return this.db.tenant(actor.tenant_id, async tx => {
       if (!await tx.one(`SELECT id FROM users WHERE tenant_id=$1 AND id=$2 AND role='CLIENT' AND active FOR SHARE`,
         actor.tenant_id, input.owner_id)) notFound('Titular no encontrado');
-      const number = input.number ?? randomInt(100_000_000_000, 1_000_000_000_000).toString();
-      const row = await tx.one<Account>(`INSERT INTO accounts (tenant_id,id,number,owner_id,currency)
-        VALUES ($1,$2,$3,$4,$5) RETURNING *`, actor.tenant_id, randomUUID(), number, input.owner_id, input.currency);
-      await audit(tx, actor, trace, 'ACCOUNT_CREATED', row!.id, null, row);
+      const row = await insertAccount(tx, actor.tenant_id, input);
+      await audit(tx, actor, trace, 'ACCOUNT_CREATED', row.id, null, row);
       return row;
     });
   }

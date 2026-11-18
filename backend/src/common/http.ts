@@ -87,7 +87,7 @@ export function Contract(options: ContractOptions) {
   } else if (options.bearer) decorators.push(ApiBearerAuth());
   if (options.id) decorators.push(ApiParam({ name: 'id', schema: { type: 'string', format: 'uuid' } }));
   if (options.refreshCookie) decorators.push(ApiCookieAuth('bankos_refresh'));
-  if (access === 'platform') decorators.push(ApiHeader({ name: 'X-Platform-Key', required: true }));
+  if (access === 'platform') decorators.push(ApiBearerAuth(), ApiHeader({ name: 'X-Platform-Key', required: false }));
   if (options.limit === 'money') decorators.push(ApiHeader({
     name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' },
     description: 'UUID nuevo para cada operación. Reusa la misma clave para reintentos de esa operación.',

@@ -227,13 +227,16 @@ class AuthService extends ChangeNotifier {
   Future<List<Json>> page(
     String path, {
     Map<String, String> filters = const {},
+    bool authenticated = true,
   }) async {
     final rows = <Json>[];
     for (var page = 1; ; page++) {
-      final data = await get(
+      final data = await request(
+        'GET',
         path,
         query: {...filters, 'page': '$page', 'limit': '100'},
-      );
+        authenticated: authenticated,
+      ) as Json;
       rows.addAll((data['items'] as List).cast<Json>());
       if (data['has_more'] != true) return rows;
     }

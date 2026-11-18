@@ -1,10 +1,11 @@
-import { randomUUID, timingSafeEqual, createHash } from 'node:crypto';
+import { randomUUID, timingSafeEqual, createHash, createHmac } from 'node:crypto';
+import { jwtVerify, SignJWT } from 'jose';
 import type { z } from 'zod';
 import type { Database, DbSession } from '../database/database.js';
 import { required } from '../common/config.js';
-import { forbidden, notFound } from '../common/errors.js';
+import { forbidden, notFound, unauthorized } from '../common/errors.js';
 import type { Identity, Trace } from '../common/types.js';
-import type { settingsPatch, tenantInput } from '../common/schemas.js';
+import { pagination, type pageSchema, type platformLoginInput, type settingsPatch, type tenantInput } from '../common/schemas.js';
 import { audit } from '../audit/audit.service.js';
 import { insertUser } from '../users/users.service.js';
 import { readRates, writeRates } from '../currencies/currencies.service.js';
@@ -24,18 +25,55 @@ async function readConfig(tx: DbSession, tenant: string) {
   return { ...config, rates: await readRates(tx, tenant), webhook: publicWebhook(await readWebhook(tx, tenant)) };
 }
 
+const platformAudience = 'bankos-platform';
+const platformSessionSeconds = 900;
+const hash = (value: string) => createHash('sha256').update(value).digest();
+
+type PlatformAccess = { key?: string; bearer?: string };
+
 export class TenantsService {
   private readonly platformKey = required('PLATFORM_ADMIN_KEY', 32);
 
+  private readonly username = process.env.PLATFORM_ADMIN_USERNAME ?? '';
+  private readonly password = process.env.PLATFORM_ADMIN_PASSWORD ?? '';
+  private readonly signingKey = createHmac('sha256', this.platformKey)
+    .update(JSON.stringify([platformAudience, this.username, this.password])).digest();
+
   constructor(private readonly db: Database) {}
 
-  private authorizePlatform(key: string | undefined) {
-    const hash = (value: string) => createHash('sha256').update(value).digest();
-    if (!key || !timingSafeEqual(hash(key), hash(this.platformKey))) forbidden();
+  async platformLogin(input: z.infer<typeof platformLoginInput>) {
+    const usernameMatches = timingSafeEqual(hash(input.username), hash(this.username));
+    const passwordMatches = timingSafeEqual(hash(input.password), hash(this.password));
+    if (!this.username || this.password.length < 12 || !usernameMatches || !passwordMatches) unauthorized();
+    const access = await new SignJWT({})
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuer('bankos').setAudience(platformAudience).setSubject(this.username)
+      .setIssuedAt().setExpirationTime(`${platformSessionSeconds}s`).sign(this.signingKey);
+    return { access_token: access, token_type: 'Bearer', expires_in: platformSessionSeconds };
   }
 
-  async create(key: string | undefined, trace: Trace, input: z.infer<typeof tenantInput>) {
-    this.authorizePlatform(key);
+  private async authorizePlatform({ key, bearer }: PlatformAccess) {
+    if (key && timingSafeEqual(hash(key), hash(this.platformKey))) return;
+    if (!bearer || !this.username || this.password.length < 12) forbidden();
+    try {
+      await jwtVerify(bearer, this.signingKey, {
+        issuer: 'bankos', audience: platformAudience, subject: this.username,
+        algorithms: ['HS256'], requiredClaims: ['exp'],
+      });
+    } catch {
+      forbidden();
+    }
+  }
+
+  async directory(input: z.infer<typeof pageSchema>) {
+    const { page, limit, offset } = pagination(input);
+    const rows = await this.db.connection().rows<{ slug: string; name: string }>(
+      'SELECT slug,name FROM active_tenant_directory($1,$2) ORDER BY slug', limit + 1, offset);
+    return { items: rows.slice(0, limit), page, limit, has_more: rows.length > limit };
+  }
+
+  async create(access: PlatformAccess, trace: Trace, input: z.infer<typeof tenantInput>) {
+    await this.authorizePlatform(access);
     if (input.webhook) await resolveEndpoint(input.webhook.url);
     const tenant = randomUUID();
     return this.db.tenant(tenant, async tx => {
@@ -76,8 +114,8 @@ export class TenantsService {
     });
   }
 
-  setStatus(key: string | undefined, trace: Trace, tenant: string, active: boolean) {
-    this.authorizePlatform(key);
+  async setStatus(access: PlatformAccess, trace: Trace, tenant: string, active: boolean) {
+    await this.authorizePlatform(access);
     return this.db.tenant(tenant, async tx => {
       const previous = await tx.one<{ active: boolean }>('SELECT active FROM tenants WHERE id=$1 FOR UPDATE', tenant);
       if (!previous) notFound('Institución no encontrada');
