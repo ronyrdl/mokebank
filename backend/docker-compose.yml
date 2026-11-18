@@ -1,0 +1,116 @@
+name: bankos
+x-app: &app
+  image: bankos-backend:local
+  build: .
+  networks: [bankos]
+x-app-env: &app-env
+  DATABASE_URL: postgresql://bankos_app:${APP_DB_PASSWORD:-local_bankos_only}@postgres:5432/${POSTGRES_DB:-bankos}
+  REDIS_URL: redis://redis:6379/0
+  JWT_SECRET: ${JWT_SECRET:-local-demo-jwt-secret-change-before-deploy}
+  PLATFORM_ADMIN_KEY: ${PLATFORM_ADMIN_KEY:-local-demo-platform-key-change-before-deploy}
+  COOKIE_SECURE: ${COOKIE_SECURE:-false}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+  TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-0}
+  ACCESS_TOKEN_SECONDS: ${ACCESS_TOKEN_SECONDS:-900}
+  REFRESH_TOKEN_SECONDS: ${REFRESH_TOKEN_SECONDS:-604800}
+  RATE_LIMIT_IP: ${RATE_LIMIT_IP:-240}
+  RATE_LIMIT_AUTH: ${RATE_LIMIT_AUTH:-25}
+  RATE_LIMIT_LOGIN_ACCOUNT: ${RATE_LIMIT_LOGIN_ACCOUNT:-10}
+  RATE_LIMIT_USER: ${RATE_LIMIT_USER:-160}
+  RATE_LIMIT_TENANT: ${RATE_LIMIT_TENANT:-400}
+  RATE_LIMIT_MONEY: ${RATE_LIMIT_MONEY:-40}
+  WEBHOOK_POLL_MS: ${WEBHOOK_POLL_MS:-1000}
+  WEBHOOK_MAX_ATTEMPTS: ${WEBHOOK_MAX_ATTEMPTS:-6}
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bankos}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_postgres_only}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks: [bankos]
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes']
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    networks: [bankos]
+    restart: unless-stopped
+  migrate:
+    <<: *app
+    command: [node, dist/database/migrate.js]
+    environment:
+      MIGRATION_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-local_postgres_only}@postgres:5432/${POSTGRES_DB:-bankos}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-local_bankos_only}
+    depends_on:
+      postgres:
+        condition: service_healthy
+  backend:
+    <<: *app
+    environment:
+      <<: *app-env
+      PORT: 3000
+    ports: ['127.0.0.1:${PORT:-3000}:3000']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, 'fetch("http://127.0.0.1:3000/api/v1/health").then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+  worker:
+    <<: *app
+    command: [node, dist/worker.js]
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  seed:
+    <<: *app
+    profiles: [demo]
+    command: [node, dist/database/seed.js]
+    environment:
+      <<: *app-env
+      ALLOW_DEMO_SEED: 'true'
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-BankOS-demo-2026!}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+  test:
+    image: bankos-backend:test
+    build:
+      context: .
+      target: test
+    profiles: [test]
+    environment: *app-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks: [bankos]
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  bankos:
