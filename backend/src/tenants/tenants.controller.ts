@@ -2,7 +2,7 @@ import { Controller, Get, HttpCode, Param, Patch, Post, Req } from '@nestjs/comm
 import { ApiTags } from '@nestjs/swagger';
 import { TenantsService } from './tenants.service.js';
 import { Contract, readBearer, resourceId } from '../common/http.js';
-import { platformSessionResponse, tenantConfigResponse, tenantCreatedResponse, tenantDirectoryResponse, tenantStatusResponse } from '../common/response-schemas.js';
+import { platformTenantListResponse, platformSessionResponse, tenantConfigResponse, tenantCreatedResponse, tenantDirectoryResponse, tenantStatusResponse } from '../common/response-schemas.js';
 import { pageSchema, platformLoginInput, settingsPatch, tenantInput, userStatus } from '../common/schemas.js';
 import type { BankRequest } from '../common/types.js';
 
@@ -10,6 +10,14 @@ import type { BankRequest } from '../common/types.js';
 @Controller('tenants')
 export class TenantsController {
   constructor(private readonly tenants: TenantsService) {}
+
+  @Get()
+  @Contract({ response: platformTenantListResponse, access: 'platform', query: pageSchema })
+  list(@Req() req: BankRequest) {
+    return this.tenants.listPlatform(
+      { key: req.get('X-Platform-Key'), bearer: readBearer(req) },
+      req.validatedQuery as Parameters<TenantsService['listPlatform']>[1]);
+  }
 
   @Get('directory')
   @Contract({ response: tenantDirectoryResponse, access: 'public', query: pageSchema })

@@ -44,6 +44,28 @@ class _LoginScreemState extends ConsumerState<LoginScreem> {
       _error = null;
     });
     try {
+      try {
+        final token = await const BanksService().loginPlatform(
+          _email.text.trim(),
+          _password.text,
+        );
+        if (!mounted) return;
+        ref.read(platformSessionProvider.notifier).login(token);
+        context.go('/operador');
+        return;
+      } on ApiError catch (error) {
+        if (error.status != 401) rethrow;
+      }
+      if (_bank == null) {
+        throw const ApiError(
+          'Revisa tus credenciales y selecciona tu banco para ingresar.',
+        );
+      }
+      if (_bank == '__other__' &&
+          !RegExp(r'^[a-z0-9][a-z0-9-]{1,62}$')
+              .hasMatch(_customBank.text.trim().toLowerCase())) {
+        throw const ApiError('Escribe un identificador de banco válido.');
+      }
       await auth.login(
         tenantSlug: _bank == '__other__'
             ? _customBank.text.trim().toLowerCase()
@@ -121,7 +143,7 @@ class _LoginScreemState extends ConsumerState<LoginScreem> {
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      'Elige tu banco e ingresa con tu correo y contraseña.',
+                      'Ingresa con tu usuario o correo y contraseña.',
                       style: TextStyle(color: textoSecundario50),
                     ),
                     const SizedBox(height: 24),
@@ -137,7 +159,9 @@ class _LoginScreemState extends ConsumerState<LoginScreem> {
                     DropdownButtonFormField<String>(
                       initialValue: _bank,
                       isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Banco'),
+                      decoration: const InputDecoration(
+                        labelText: 'Banco (para clientes y administradores)',
+                      ),
                       hint: const Text('Selecciona tu banco'),
                       items: [
                         for (final bank in banks.entries)
@@ -153,8 +177,6 @@ class _LoginScreemState extends ConsumerState<LoginScreem> {
                       onChanged: _busy
                           ? null
                           : (value) => setState(() => _bank = value),
-                      validator: (value) =>
-                          value == null ? 'Selecciona un banco' : null,
                     ),
                     if (_bank == '__other__') ...[
                       const SizedBox(height: 16),
@@ -164,26 +186,20 @@ class _LoginScreemState extends ConsumerState<LoginScreem> {
                         decoration: const InputDecoration(
                           labelText: 'Identificador del banco',
                         ),
-                        validator: (value) =>
-                            RegExp(r'^[a-z0-9][a-z0-9-]{1,62}$')
-                                .hasMatch(value!.trim().toLowerCase())
-                            ? null
-                            : 'Escribe un identificador válido',
                       ),
                     ],
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _email,
                       enabled: !_busy,
-                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.username],
                       decoration: const InputDecoration(
-                        labelText: 'Correo electrónico',
+                        labelText: 'Usuario o correo electrónico',
                       ),
                       validator: (value) =>
-                          RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-                              .hasMatch(value!.trim())
-                          ? null
-                          : 'Escribe un correo válido',
+                          value == null || value.trim().isEmpty
+                          ? 'Escribe tu usuario o correo'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -222,10 +238,6 @@ class _LoginScreemState extends ConsumerState<LoginScreem> {
                     TextButton(
                       onPressed: _busy ? null : () => context.push('/registro'),
                       child: const Text('Registrarme en un banco'),
-                    ),
-                    TextButton(
-                      onPressed: _busy ? null : () => context.push('/operador'),
-                      child: const Text('Administración de plataforma'),
                     ),
                   ],
                 ),

@@ -75,10 +75,6 @@ class Welcome extends StatelessWidget {
                   ),
                 ),
               ),
-              TextButton(
-                onPressed: () => context.push('/operador'),
-                child: const Text('Administración de plataforma'),
-              ),
               const SizedBox(height: 12),
               const Text(
                 'Moke protege tus operaciones.',

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'platform_banks.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,14 +31,11 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     'email': 'Correo del administrador',
     'password': 'Contraseña del administrador',
   };
-  final _accessForm = GlobalKey<FormState>();
-  final _username = TextEditingController();
-  final _password = TextEditingController();
   final _form = GlobalKey<FormState>();
   final _fields = {
     for (final field in _labels.keys) field: TextEditingController(),
   };
-  String? _platformToken;
+  bool _showBanks = true;
   String _currency = 'COP';
   Json? _bank;
   String? _error;
@@ -44,8 +43,6 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
   @override
   void dispose() {
-    _username.dispose();
-    _password.dispose();
     for (final field in _fields.values) {
       field.dispose();
     }
@@ -54,33 +51,6 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
 
   String _value(String key) => _fields[key]!.text.trim();
   String _decimal(String key) => _value(key).replaceAll(',', '.');
-
-  Future<void> _authorize() async {
-    if (_busy || !_accessForm.currentState!.validate()) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final token = await const BanksService().loginPlatform(
-        _username.text.trim(),
-        _password.text,
-      );
-      if (!mounted) return;
-      _password.clear();
-      setState(() => _platformToken = token);
-    } on ApiError catch (error) {
-      if (mounted) {
-        setState(
-          () => _error = error.status == 401
-              ? 'Revisa el usuario y la contraseña del superadmin.'
-              : error.message,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
 
   void _clearBank() {
     for (final field in _fields.values) {
@@ -99,7 +69,7 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
     });
     try {
       final bank = await const BanksService().create(
-        platformToken: _platformToken!,
+        platformToken: ref.read(platformSessionProvider)!,
         bank: {
           'name': _value('name'),
           'slug': _value('slug').toLowerCase(),
@@ -130,12 +100,13 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       if (!mounted) return;
       AuthService.banks[bank['slug'] as String] = bank['name'] as String;
       ref.invalidate(bankDirectoryProvider);
+      ref.invalidate(platformBanksProvider);
       setState(() => _bank = bank);
     } on ApiError catch (error) {
       if (mounted) {
         setState(() {
           if (error.status == 403) {
-            _platformToken = null;
+            ref.read(platformSessionProvider.notifier).logout();
             _clearBank();
             _error = 'Vuelve a iniciar sesión como superadmin.';
           } else {
@@ -185,60 +156,35 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
       appBar: AppBar(
         title: const Text('Administración de plataforma'),
         actions: [
-          if (_platformToken != null)
+          if (ref.watch(platformSessionProvider) != null)
             IconButton(
               tooltip: 'Cerrar acceso de plataforma',
               onPressed: _busy
                   ? null
                   : () => setState(() {
-                      _platformToken = null;
+                      ref.read(platformSessionProvider.notifier).logout();
                       _clearBank();
                     }),
               icon: const Icon(Icons.logout),
             ),
         ],
       ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _showBanks ? 0 : 1,
+        onDestinationSelected: _busy
+            ? null
+            : (index) => setState(() => _showBanks = index == 0),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_outlined),
+            label: 'Bancos',
+          ),
+          NavigationDestination(icon: Icon(Icons.add), label: 'Crear banco'),
+        ],
+      ),
       body: SafeArea(
-        child: _platformToken == null
-            ? Form(
-                key: _accessForm,
-                child: BankPage(
-                  title: 'Acceso de superadmin',
-                  form: true,
-                  children: [
-                    TextFormField(
-                      controller: _username,
-                      enabled: !_busy,
-                      autofillHints: const [AutofillHints.username],
-                      decoration: const InputDecoration(labelText: 'Usuario'),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Ingresa el usuario.'
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _password,
-                      autofillHints: const [AutofillHints.password],
-                      enabled: !_busy,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Contraseña',
-                      ),
-                      validator: (value) => value == null || value.isEmpty
-                          ? 'Ingresa la contraseña.'
-                          : null,
-                      onFieldSubmitted: (_) => _authorize(),
-                    ),
-                    const SizedBox(height: 16),
-                    if (_error != null) _errorMessage(context),
-                    FilledButton(
-                      onPressed: _busy ? null : _authorize,
-                      child: Text(_busy ? 'Verificando…' : 'Ingresar'),
-                    ),
-                  ],
-                ),
-              )
+        child: _showBanks
+            ? const PlatformBanks()
             : bank != null
             ? BankPage(
                 title: 'Banco creado',
@@ -260,7 +206,10 @@ class _OperatorScreenState extends ConsumerState<OperatorScreen> {
                     child: const Text('Crear otro banco'),
                   ),
                   TextButton(
-                    onPressed: () => context.go('/login?banco=${bank['slug']}'),
+                    onPressed: () {
+                      ref.read(platformSessionProvider.notifier).logout();
+                      context.go('/login?banco=${bank['slug']}');
+                    },
                     child: const Text('Ir al ingreso del banco'),
                   ),
                 ],

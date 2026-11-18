@@ -74,3 +74,5 @@ export const auditListResponse = paginatedResponse(z.object({
   previous_state: z.unknown(), new_state: z.unknown(),
   ip: z.string(), correlation_id: z.string(), created_at: dateTime,
 }).meta({ title: 'AuditEntry' }));
+
+export const platformTenantListResponse = paginatedResponse(tenantStatusResponse.extend({ slug: z.string(), name: z.string() }));

@@ -65,6 +65,14 @@ export class TenantsService {
     }
   }
 
+  async listPlatform(access: PlatformAccess, input: z.infer<typeof pageSchema>) {
+    await this.authorizePlatform(access);
+    const { page, limit, offset } = pagination(input);
+    const rows = await this.db.connection().rows<{ id: string; slug: string; name: string; active: boolean }>(
+      'SELECT * FROM platform_tenant_directory($1,$2) ORDER BY slug', limit + 1, offset);
+    return { items: rows.slice(0, limit), page, limit, has_more: rows.length > limit };
+  }
+
   async directory(input: z.infer<typeof pageSchema>) {
     const { page, limit, offset } = pagination(input);
     const rows = await this.db.connection().rows<{ slug: string; name: string }>(

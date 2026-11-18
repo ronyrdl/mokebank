@@ -8,12 +8,16 @@ import '../screems/operator/operator_screen.dart';
 import '../screems/register_screen.dart';
 import '../screems/welcome.dart';
 import '../providers/session_provider.dart';
+import '../services/banks_service.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     redirect: (context, state) {
       final path = state.uri.path;
+      final platform = ref.read(platformSessionProvider) != null;
+      if (platform) return path == '/operador' ? null : '/operador';
       final role = ref.read(sessionProvider).role;
+      if (path == '/operador') return '/login';
       final home = switch (role) {
         'ADMIN' => '/admin',
         'CLIENT' => '/cliente',
@@ -57,6 +61,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
   ref.listen(sessionProvider, (_, _) => router.refresh());
+  ref.listen(platformSessionProvider, (_, _) => router.refresh());
   ref.onDispose(router.dispose);
   return router;
 });

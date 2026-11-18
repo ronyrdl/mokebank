@@ -6,6 +6,24 @@ final bankDirectoryProvider = FutureProvider.autoDispose(
   (ref) => const BanksService().directory(),
 );
 
+final platformSessionProvider = NotifierProvider<PlatformSession, String?>(
+  PlatformSession.new,
+);
+
+class PlatformSession extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void login(String token) => state = token;
+  void logout() => state = null;
+}
+
+final platformBanksProvider = FutureProvider.autoDispose((ref) {
+  final token = ref.watch(platformSessionProvider);
+  if (token == null) return Future.value(<Json>[]);
+  return const BanksService().listPlatform(token);
+});
+
 class BanksService {
   const BanksService();
 
@@ -26,6 +44,31 @@ class BanksService {
       );
     }
     return token;
+  }
+
+  Future<List<Json>> listPlatform(String token) async {
+    final banks = <Json>[];
+    for (var page = 1; ; page++) {
+      final data = await auth.request(
+        'GET',
+        '/tenants',
+        authenticated: false,
+        headers: {'Authorization': 'Bearer $token'},
+        query: {'page': '$page', 'limit': '100'},
+      ) as Json;
+      banks.addAll((data['items'] as List).cast<Json>());
+      if (data['has_more'] != true) return banks;
+    }
+  }
+
+  Future<void> setStatus(String token, String id, bool active) async {
+    await auth.request(
+      'PATCH',
+      '/tenants/$id/status',
+      authenticated: false,
+      headers: {'Authorization': 'Bearer $token'},
+      body: {'active': active},
+    );
   }
 
   Future<Json> config() => auth.get('/tenants/config');

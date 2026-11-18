@@ -14,7 +14,7 @@ La app usa la API de BankOS en AWS. Para cambiarla, usa `--dart-define=BANKOS_AP
 
 ## Probar
 
-1. En **Administración de plataforma**, ingresa como superadmin con tu usuario y contraseña y crea un banco con su administrador inicial. En el comprobante, pulsa **Copiar credenciales del administrador** para compartirlas por un canal privado.
+1. En **Comenzar**, ingresa con el usuario y contraseña del superadmin para crear un banco con su administrador inicial. En el comprobante, pulsa **Copiar credenciales del administrador** para compartirlas por un canal privado.
 2. En **Comenzar**, selecciona ese banco e inicia sesión con las credenciales del administrador. Desde el panel puedes seguir gestionando clientes y cuentas.
 3. Para registrarte como cliente, abre **Registrarme en un banco**, selecciona un banco activo y llena el formulario. Se abre una cuenta de saldo cero en la moneda principal del banco. Inicia sesión con tu correo y contraseña.
 4. Como cliente, revisa las cuentas, consulta los movimientos y prueba las operaciones solo con datos de demostración. El PIN local de la demo es `2580`. Sirve para mostrar el flujo del reto y no constituye una autorización en el servidor.

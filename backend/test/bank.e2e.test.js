@@ -324,3 +324,19 @@ test('autorregistro crea una sola cuenta en el banco elegido y respeta su aislam
   expect(data(await call('/tenants/directory?limit=100')).items).not.toContainEqual({ slug: bank.slug, name: bank.slug });
   expect((await call('/auth/self-register', { body: { ...input, email: 'another@example.test' } })).status).toBe(404);
 });
+
+test('solo plataforma lista bancos activos e inactivos y puede reactivarlos', async () => {
+  await app.get(REDIS).del('bankos:rate:auth:127.0.0.1');
+  const headers = { 'X-Platform-Key': process.env.PLATFORM_ADMIN_KEY };
+  expect((await call('/tenants')).status).toBe(403);
+  expect((await call('/tenants', { token: a.token })).status).toBe(403);
+  const bank = await provision('status-panel');
+  expect(data(await call('/tenants?limit=100', { headers })).items)
+    .toContainEqual({ id: bank.id, slug: bank.slug, name: bank.slug, active: true });
+  data(await call(`/tenants/${bank.id}/status`, { method: 'PATCH', headers, body: { active: false } }));
+  expect((await login(bank.slug, bank.email)).status).toBe(401);
+  expect(data(await call('/tenants?limit=100', { headers })).items)
+    .toContainEqual({ id: bank.id, slug: bank.slug, name: bank.slug, active: false });
+  data(await call(`/tenants/${bank.id}/status`, { method: 'PATCH', headers, body: { active: true } }));
+  expect((await login(bank.slug, bank.email)).status).toBe(200);
+});
