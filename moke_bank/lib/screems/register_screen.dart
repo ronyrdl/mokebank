@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -29,6 +30,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   String? _bank;
   String? _error;
   Json? _account;
+  String? _credentials;
   bool _busy = false;
 
   @override
@@ -72,8 +74,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         },
       ) as Json;
       if (!mounted) return;
+      final account = result['account'] as Json;
+      final user = result['user'] as Json;
+      final banks = ref.read(bankDirectoryProvider).asData?.value ?? <Json>[];
+      final bankName = banks
+          .where((bank) => bank['slug'] == _bank)
+          .map((bank) => bank['name'])
+          .firstOrNull;
+      final credentials =
+          'Banco: ${bankName ?? _bank}\n'
+          'Identificador: $_bank\n'
+          'Correo: ${user['email']}\n'
+          'Contraseña: ${_fields['password']!.text}\n'
+          'Número de cuenta: ${account['number']}\n'
+          'Moneda: ${account['currency']}';
       _fields['password']!.clear();
-      setState(() => _account = result['account'] as Json);
+      setState(() {
+        _account = account;
+        _credentials = credentials;
+      });
     } on ApiError catch (error) {
       if (mounted) {
         setState(
@@ -84,6 +103,25 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _copyCredentials() async {
+    final credentials = _credentials;
+    if (credentials == null) return;
+    try {
+      await Clipboard.setData(ClipboardData(text: credentials));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Credenciales y número de cuenta copiados.'),
+        ),
+      );
+    } on PlatformException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo copiar. Vuelve a intentar.')),
+      );
     }
   }
 
@@ -102,7 +140,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     'Tu cuenta ${account['number']} está activa en ${account['currency']}.',
                   ),
                   const SizedBox(height: 16),
-                  FilledButton(
+                  FilledButton.icon(
+                    onPressed: _copyCredentials,
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Copiar credenciales y cuenta'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
                     onPressed: () => context.go('/login?banco=$_bank'),
                     child: const Text('Iniciar sesión'),
                   ),
